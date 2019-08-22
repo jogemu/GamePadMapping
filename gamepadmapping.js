@@ -1,25 +1,22 @@
 class GamePadMapping {
-  constructor(gamepad,buttons,axes,period,dz) {
+  constructor(gamepad,buttons,axes,period,deadzone) {
     this.gamepad = gamepad
     this.index = gamepad.index
     this.buttons = []
     this.axes = []
     this.ready = false
-    this.deadzone = dz
     this.period = period
+    this.deadzone = deadzone
 
     let f = () => {console.warn('Unhandled gamepad event!')}
     for(let button of buttons) {
       this['on'+button.name]=f
       this['on'+button.name+'up']=f
-      button.array = null
-      button.duration = 0
-      this.buttons.push(button)
+      this.buttons.push({name:button.name,symbol:button.symbol,description:button.description,array:null,duration:0})
     }
     for(let axe of axes) {
       this['on'+axe.name]=f
-      axe.arrays = [null,null,null,null]
-      this.axes.push(axe)
+      this.axes.push({name:axe.name,symbols:axe.symbols,axe:axe.description,arrays:[null,null,null,null]})
     }
 
     this.onmapnext=f
@@ -45,7 +42,6 @@ class GamePadMapping {
 
   disconnect() { clearInterval(this.iid) }
 
-  // Change the callback-functions with a function
   on(name,callback) { this['on'+name]=callback }
   up(name,callback) { this['on'+name+'up']=callback }
 
@@ -64,13 +60,13 @@ class GamePadMapping {
       }
     }
     for(let axe of this.axes) {
-      let r = [];
+      let r = []
       for(let i = 0;i<4;i+=2) {
-        let value = this.valueof(axe.arrays[i])
-        if(value > this.deadzone) r.push(value+0)
+        let a = this.valueof(axe.arrays[i])
+        if(a > this.deadzone) r.push(a)
         else {
-          let value = this.valueof(axe.arrays[i+1])
-          if(value > this.deadzone) r.push(-value+0)
+          let b = this.valueof(axe.arrays[i+1])
+          if(b > this.deadzone) r.push(-b)
           else r.push(0)
         }
       }
@@ -82,7 +78,7 @@ class GamePadMapping {
     for(let button of this.buttons) {
       if(button.array == null) {
         this.onmapnext(button.symbol)
-        let matching = this.cache()
+        let matching = this.matching()
         if(matching) {
           this.wipecache()
           if(!this.isalreadymapped(matching)) button.array = matching
@@ -95,7 +91,7 @@ class GamePadMapping {
       for(let i = 0;i<4;i++) {
         if(axe.arrays[i] == null) {
           this.onmapnext(axe.symbols[(i-i%2)/2].symbol+' '+axe.symbols[(i-i%2)/2].directions[i%2])
-          let matching = this.cache()
+          let matching = this.matching()
           if(matching) {
             this.wipecache()
             if(!this.isalreadymapped(matching)) axe.arrays[i] = matching
@@ -113,7 +109,7 @@ class GamePadMapping {
     this.onready()
   }
 
-  cache() {
+  matching() {
     for(let i = 0;i<this.gamepad.buttons.length;i++) {
       if(!this.cbuttons[i]) this.cbuttons[i] = 0
 
@@ -157,6 +153,7 @@ class GamePadMapping {
     } // axis or dpad
     return false
   }
+
   wipecache() {
     this.cbuttons = []
     this.caxes = []
@@ -165,9 +162,9 @@ class GamePadMapping {
   }
 
   isalreadymapped(o) {
-    for(let button of this.buttons) if(this.comparearray(button.array, o)) return true;
+    for(let button of this.buttons) if(this.comparearray(button.array, o)) return true
     for(let axe of this.axes) {
-      for(let array of axe.arrays) if(this.comparearray(array,o)) return true;
+      for(let array of axe.arrays) if(this.comparearray(array,o)) return true
     }
   }
 
@@ -180,8 +177,8 @@ class GamePadMapping {
   valueof(o) {
     if(o==null) return null
     if(o.length==1) return o[0].value
-    else if(o.length==2) return this.gamepad.axes[o[0]]*o[1]
-    else return (this.gamepad.axes[o[0]]*o[1]+1)/2
+    if(o.length==2) return this.gamepad.axes[o[0]]*o[1]
+    return (this.gamepad.axes[o[0]]*o[1]+1)/2
   }
 
   export() {
@@ -199,20 +196,19 @@ class GamePadMapping {
     for(let axe of this.axes) {
       let axy = []
       for(let i = 0;i<4;i++) {
-        let button = axe.arrays[i]
-        if(button==null) axy.push(null)
-        else if(button.length==1) axy.push([this.gamepad.buttons.indexOf(button[0])])
-        else if(button.length==2) axy.push(button)
-        else axy.push([button[0],button[1],this.gamepad.buttons.indexOf(button[2])])
+        let array = axe.arrays[i]
+        if(array==null) axy.push(null)
+        else if(array.length==1) axy.push([this.gamepad.array.indexOf(array[0])])
+        else if(array.length==2) axy.push(array)
+        else axy.push([array[0],array[1],this.gamepad.array.indexOf(array[2])])
       }
       r.axes.push(axy)
     }
-    this.ready = false
     return r
   }
 
   import(o) {
-    if(o.id!=this.gamepad.id) return false
+    if(o.id==this.gamepad.id) {
     for(let i = 0;i<o.buttons.length;i++) {
       if(o.buttons[i]==null) this.buttons[i].array = null
       else if(o.buttons[i].length==1) this.buttons[i].array = [this.gamepad.buttons[o.buttons[i]]]
@@ -228,6 +224,7 @@ class GamePadMapping {
       }
     }
     this.finished()
+    }
   }
 
 }
